@@ -2,13 +2,17 @@ import React, { useState } from 'react'
 import '../App.css'
 import Spinner from '../components/Spinner'
 import {toast} from 'react-toastify'
+import {getAuth} from 'firebase/auth'
+import {getStorage, ref, uploadBytesResumable, getDownloadURL} from 'firebase/storage'
 
 export default function CreateListing() {
     const [geoLocationEnabled,setGeoLocationEnaled] = useState(true)
     const [loading,setLoading] = useState(false)
-    const [formData,setFormData] = useState({type:'rent',name:'',bedrooms:1,bathrooms:1,parking:false,furnished:false,address:'',description:'',offer:false,regularPrice:0,discountedPrice:0, longitude:0,latitude:0,images:{}})
-    const {type,name,bedrooms,bathrooms,parking,furnished,address,description,offer,regularPrice,discountedPrice,longitude,latitude,images} = formData
-    const onChange = async(e)=>{
+    const [formData,setFormData] = useState({type:'rent',name:'',bedrooms:1,bathrooms:1,parking:false,furnished:false,address:'',description:'',offer:false,regularPrice:50,discountedPrice:0, longitude:0,latitude:0,images:{}})
+    const {type,name,bedrooms,bathrooms,parking,furnished,address,description,offer,regularPrice,discountedPrice,longitude,latitude,images} = formData;
+    const auth = getAuth();
+
+    const onChange = (e)=>{
         let boolean = null;
         if (e.target.value === 'true') {
             boolean = true;
@@ -24,16 +28,9 @@ export default function CreateListing() {
         if (!e.target.files) {
             setFormData({...formData,[e.target.id]:boolean??e.target.value});
         }
-        let geoLocation = {};
-        let location;
-        if (geoLocationEnabled) {
-            const response = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${address}.json?access_token=${import.meta.env.REACT_APP_API}`);
-            const data = await response.json();
-            console.log(data);
-        }
     }
 
-    const onSubmit = (e)=>{
+    const onSubmit = async(e)=>{
         e.preventDefault()
         setLoading(true);
         if (discountedPrice >= regularPrice) {
@@ -45,6 +42,37 @@ export default function CreateListing() {
             setLoading(false);
             toast.error('maximum of 6 images are allowed');
         }
+        let geoLocation = {lati:0,longi:0};
+        let location;
+        if (geoLocationEnabled) {
+            const response = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${address}.json?access_token=${import.meta.env.VITE_REACT_APP_API}`);
+            const data = await response.json();
+            geoLocation.lati = data.features[0] != undefined ? data.features[0].geometry.coordinates[1] : 0;
+            geoLocation.longi = data.features[0] != undefined ? data.features[0].geometry.coordinates[0] : 0;
+            location = data.features[0] == undefined && undefined;
+            if (location == undefined || location.includes('undefined') ) {
+                setLoading(false);
+                toast.error('Please enter a valid address');
+                return;
+            }
+        }
+        else{
+            geoLocation.lati = latitude;
+            geoLocation.longi = longitude;
+        }
+        const storeImage = async(image)=>{
+            return new Promise((resolve,reject)=>{
+                const storage = getStorage();
+                const filename = `${auth.currentUser.uid}-${image.name}`;
+            })
+        }
+        const imgUrls = await Promise.all(
+            [...images].map((image)=>storeImage(image)).catch((error)=>{
+                setLoading(false);
+                toast.error('Images were not uploaded');
+                return;
+            })
+        )
     }
     if (loading) {
         return <Spinner/>;
