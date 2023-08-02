@@ -4,6 +4,7 @@ import Spinner from '../components/Spinner'
 import {toast} from 'react-toastify'
 import {getAuth} from 'firebase/auth'
 import {getStorage, ref, uploadBytesResumable, getDownloadURL} from 'firebase/storage'
+import { v4 as uuidv4 } from 'uuid'
 
 export default function CreateListing() {
     const [geoLocationEnabled,setGeoLocationEnaled] = useState(true)
@@ -63,7 +64,7 @@ export default function CreateListing() {
         const storeImage = async(image)=>{
             return new Promise((resolve,reject)=>{
                 const storage = getStorage();
-                const filename = `${auth.currentUser.uid}-${image.name}`;
+                const filename = `${auth.currentUser.uid}-${image.name}-${ uuidv4()}`;
             })
         }
         const imgUrls = await Promise.all(
