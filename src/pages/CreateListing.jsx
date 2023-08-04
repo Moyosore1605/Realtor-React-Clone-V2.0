@@ -5,8 +5,12 @@ import {toast} from 'react-toastify'
 import {getAuth} from 'firebase/auth'
 import {getStorage, ref, uploadBytesResumable, getDownloadURL} from 'firebase/storage'
 import { v4 as uuidv4 } from 'uuid'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { db } from '../firebase'
+import { useNavigate } from 'react-router'
 
 export default function CreateListing() {
+    const navigate = useNavigate();
     const [geoLocationEnabled,setGeoLocationEnaled] = useState(true)
     const [loading,setLoading] = useState(false)
     const [formData,setFormData] = useState({type:'rent',name:'',bedrooms:1,bathrooms:1,parking:false,furnished:false,address:'',description:'',offer:false,regularPrice:50,discountedPrice:0, longitude:0,latitude:0,images:{}})
@@ -34,7 +38,7 @@ export default function CreateListing() {
     const onSubmit = async(e)=>{
         e.preventDefault()
         setLoading(true);
-        if (discountedPrice >= regularPrice) {
+        if (+discountedPrice >= +regularPrice) {
             setLoading(false);
             toast.error('Discounted price must be lower than regular price');
             return;
@@ -51,7 +55,7 @@ export default function CreateListing() {
             geoLocation.lati = data.features[0] != undefined ? data.features[0].geometry.coordinates[1] : 0;
             geoLocation.longi = data.features[0] != undefined ? data.features[0].geometry.coordinates[0] : 0;
             location = data.features[0] == undefined && undefined;
-            if (location == undefined || location.includes('undefined') ) {
+            if (location == undefined ) {
                 setLoading(false);
                 toast.error('Please enter a valid address');
                 return;
@@ -65,15 +69,49 @@ export default function CreateListing() {
             return new Promise((resolve,reject)=>{
                 const storage = getStorage();
                 const filename = `${auth.currentUser.uid}-${image.name}-${ uuidv4()}`;
+                const storageRef = ref(storage, filename);
+                const uploadTask = uploadBytesResumable(storageRef,image);
+                uploadTask.on('state_changed', (snapshot) => {
+                    // Observe state change events such as progress, pause, and resume
+                    // Get task progress, including the number of bytes uploaded and the total number of bytes to be uploaded
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    console.log('Upload is ' + progress + '% done');
+                    switch (snapshot.state) {
+                        case 'paused':
+                            console.log('Upload is paused');
+                            break;
+                        case 'running':
+                            console.log('Upload is running');
+                            break;
+                    }
+                },
+                (error) => {
+                    // Handle unsuccessful uploads
+                    reject(error);
+                }, 
+                () => {
+                    // Handle successful uploads on complete
+                    // For instance, get the download URL: https://firebasestorage.googleapis.com/...
+                    getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {resolve(downloadURL);
+                    });
+                });
             })
         }
         const imgUrls = await Promise.all(
-            [...images].map((image)=>storeImage(image)).catch((error)=>{
+            [...images].map((image)=>storeImage(image))).catch((error)=>{
                 setLoading(false);
                 toast.error('Images were not uploaded');
                 return;
-            })
-        )
+            });
+            const formDataCopy = {...formData, imgUrls, geoLocation, timeStamp:serverTimestamp()};
+            delete formDataCopy.images;
+            !formDataCopy.offer && delete formDataCopy.discountedPrice;
+            delete formDataCopy.latitude;
+            delete formDataCopy.longitude;
+            const docRef = await addDoc(collection(db,'listings'),formDataCopy);
+            setLoading(false);
+            toast.success('Listing was created successfully');
+            navigate(`/category/${formDataCopy.type}/${docRef.id}`);
     }
     if (loading) {
         return <Spinner/>;
