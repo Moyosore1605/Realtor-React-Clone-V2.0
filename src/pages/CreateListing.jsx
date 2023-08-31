@@ -109,6 +109,7 @@ export default function CreateListing() {
             delete formDataCopy.latitude;
             delete formDataCopy.longitude;
             const docRef = await addDoc(collection(db,'listings'),formDataCopy);
+            console.log(docRef)
             setLoading(false);
             toast.success('Listing was created successfully');
             navigate(`/category/${formDataCopy.type}/${docRef.id}`);
